@@ -1,0 +1,24 @@
+# --- PyCharm & IDE ---
+.idea/
+/shelf/
+/workspace.xml
+/httpRequests/
+*.iws
+*.iml
+
+# --- Python & Environments ---
+venv/
+ENV/
+env/
+__pycache__/
+*.xml
+*.py[cod]
+*$py.class
+
+# --- Testing ---
+.pytest_cache/
+.cache/
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
