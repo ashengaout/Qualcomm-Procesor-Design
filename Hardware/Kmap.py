@@ -53,34 +53,19 @@ def display_kmap(tt: TruthTable):
     rows, cols = _axes(n)
     row_label, col_label = _var_labels(n)
 
-    col_headers = [format(c, f'0{n - len(rows).bit_length() + 1}b')
-                   if n > 2 else str(c) for c in cols]
-
-    # Build a prettier header
-    col_bits = len(cols)
-    cell_w = 3
-
-    # Header row
     label_pad = max(len(row_label), 2)
     print("\n--- K-Map ---")
-    header = f"{'':>{label_pad}} \\ {col_label}"
-    print(header)
-
-    col_header_str = f"{'':>{label_pad}}   " + "  ".join(
+    print(f"{'':>{label_pad}} \\ {col_label}")
+    print(f"{'':>{label_pad}}   " + "  ".join(
         format(c, f'0{n - (1 if n == 3 else 2)}b') if n >= 3 else str(c)
         for c in cols
-    )
-    print(col_header_str)
-
+    ))
     divider = f"{'':>{label_pad}}  +" + ("----" * len(cols)) + "-"
     print(divider)
 
     for r in rows:
         row_label_str = format(r, f'0{1 if n <= 3 else 2}b')
-        cells = []
-        for c in cols:
-            minterm = cell_minterm(r, c, n)
-            cells.append(f" {tt.outputs[minterm]} ")
+        cells = [f" {tt.outputs[cell_minterm(r, c, n)]} " for c in cols]
         print(f"{row_label_str:>{label_pad}}  |" + "|".join(cells) + "|")
 
     print(divider)
@@ -128,7 +113,7 @@ def is_valid(minterms_in_group: list[int], n: int) -> bool:
 
 
 # Derive the simplified product term that represents a group of minterms.
-def term_from_group(group: list[int], var_names: list[str]) -> str:
+def prod_term_from_group(group: list[int], var_names: list[str]) -> str:
     n = len(var_names)
     xor_mask = 0
     for a, b in combinations(group, 2):
@@ -139,15 +124,51 @@ def term_from_group(group: list[int], var_names: list[str]) -> str:
     for i, var in enumerate(var_names):
         bit_pos = n - 1 - i
         if (xor_mask >> bit_pos) & 1:
-            continue
-        if (base >> bit_pos) & 1:
-            term_parts.append(var)
-        else:
-            term_parts.append(f"{var}'")
+            continue  # variable eliminated
+        term_parts.append(var if (base >> bit_pos) & 1 else f"{var}'")
 
-    if not term_parts:
-        return "1"
-    return "".join(term_parts)
+    return "".join(term_parts) if term_parts else "1"
+
+# Derive simplified sum term that represents a group of maxterms
+def sum_term_from_group(group: list[int], var_names: list[str]) -> str:
+    n = len(var_names)
+    xor_mask = 0
+    for a, b in combinations(group, 2):
+        xor_mask |= (a ^ b)
+
+    base = group[0]
+    literals = []
+    for i, var in enumerate(var_names):
+        bit_pos = n - 1 - i
+        if (xor_mask >> bit_pos) & 1:
+            continue  # variable eliminated
+        # POS: 0-bit → uncomplimented, 1-bit → complemented
+        literals.append(var if not (base >> bit_pos) & 1 else f"{var}'")
+
+    return "(" + " + ".join(literals) + ")" if literals else "0"
+
+def greedy_cover(targets: list[int], n: int) -> list[list[int]]:
+    candidates = []
+    for size in [8, 4, 2, 1]:
+        if size > len(targets):
+            continue
+        for group in combinations(targets, size):
+            group = list(group)
+            if is_valid(group, n):
+                candidates.append(group)
+
+    candidates.sort(key=lambda g: (-len(g), g[0]))
+
+    covered = set()
+    groups_used = []
+    for group in candidates:
+        if any(m not in covered for m in group):
+            groups_used.append(group)
+            covered.update(group)
+        if covered == set(targets):
+            break
+
+    return groups_used
 
 
 """
@@ -164,42 +185,27 @@ def term_from_group(group: list[int], var_names: list[str]) -> str:
         groups_used     : list of (minterm_list, term_string)
     """
 
-def simplify_kmap(tt:TruthTable) -> tuple[str, list[tuple[list[int], str]]]:
-    minterms = tt.minterms
-    if not minterms:
-        return "F=0", []
-    if len(minterms) == 2**tt.n:
-        return "F=1", []
+def simplify_kmap(tt:TruthTable, form: str = "SOP") -> tuple[str, list[tuple[list[int], str]]]:
+    form = form.upper()
 
-    n = tt.n
-    all_terms = list(range(2**n))
+    if form == "SOP":
+        targets = tt.minterms
+        if not targets:
+            return "F = 0", []
+        if len(targets) == 2 ** tt.n:
+            return "F = 1", []
+        groups = greedy_cover(targets, tt.n)
+        terms = [prod_term_from_group(g, tt.var_names) for g in groups]
+        expr = "F = " + " + ".join(terms)
+        return expr, list(zip(groups, terms))
 
-    #--generate all candidate groups-----
-    candidates = []
-    for size in [8, 4, 2, 1]:
-        if size > len(minterms):
-            continue
-        for group in combinations(minterms, size):
-            group = list(group)
-
-            if is_valid(group, n):
-                candidates.append(group)
-
-    candidates.sort(key=lambda g: (-len(g), g[0]))
-    covered = set()
-    groups_used = []
-    terms_used = []
-
-    for group in candidates:
-        uncovered_in_group = [m for m in group if m not in covered]
-        if uncovered_in_group:
-            term = term_from_group(group, tt.var_names)
-            groups_used.append((group, term))
-            terms_used.append(term)
-            covered.update(group)
-
-        if covered == set(minterms):
-            break
-
-    simplified = "F = " + " + ".join(terms_used) if terms_used else "F = 0"
-    return simplified, groups_used
+    else:  # POS
+        targets = tt.maxterms
+        if not targets:
+            return "F = 1", []
+        if len(targets) == 2 ** tt.n:
+            return "F = 0", []
+        groups = greedy_cover(targets, tt.n)
+        terms = [sum_term_from_group(g, tt.var_names) for g in groups]
+        expr = "F = " + " * ".join(terms)
+        return expr, list(zip(groups, terms))

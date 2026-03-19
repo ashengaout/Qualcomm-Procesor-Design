@@ -6,7 +6,7 @@ Spring 2026
 
 from Hardware.data_system import DataSystem
 from Hardware.truth_table import get_num_vars, get_truth_table
-from Hardware.boolean_logic import display_canonical
+from Hardware.boolean_logic import display_canonical, generate_sop, generate_pos
 from Hardware.Kmap import display_kmap, simplify_kmap
 from Hardware.logic_check import validate
 
@@ -39,7 +39,7 @@ def run_task2():
     # ── Section 2: K-Map + simplification ────────────────────
     if n <= 4:
         display_kmap(tt)
-        simplified, groups = simplify_kmap(tt)
+        simplified, groups = simplify_kmap(tt, form)
 
         print("--- K-Map Groups (Greedy) ---")
         if groups:
@@ -50,14 +50,14 @@ def run_task2():
 
         print(f"\n--- Simplified Boolean Expression ---")
         print(f"  {simplified}")
+        expr_to_validate = simplified
     else:
-        # For n > 4 the assignment only requires canonical form
-        simplified = None
         print("\n(K-Map simplification not performed for n > 4 variables.)")
+        print("Validating canonical expression instead.\n")
+        expr_to_validate = generate_sop(tt) if form == "SOP" else generate_pos(tt)
 
-    # ── Section 3: Validation ─────────────────────────────────
-    if simplified is not None:
-        validate(tt, simplified)
+    # ── Section 3: Validation — always runs ───────────────────
+    validate(tt, expr_to_validate)
 
     print("\nDone.")
 

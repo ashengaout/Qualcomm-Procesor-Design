@@ -16,7 +16,7 @@ class TruthTable():
     def __init__(self, num_vars: int, output_vals: list[int]):
         self.n = num_vars
         self.outputs = output_vals
-        self.var_names = [chr(ord['A'] + i) for i in range(num_vars)]
+        self.var_names = [chr(ord('A') + i) for i in range(num_vars)]
 
     @property
     def minterms(self) -> list[int]:

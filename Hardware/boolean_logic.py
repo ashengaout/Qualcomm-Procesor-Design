@@ -28,19 +28,18 @@ def maxterm_sum(maxterm_inx: int, var_names: list[str]) -> str:
 
 def generate_sop(tt: TruthTable) -> str:
     if not tt.minterms:
-        return "F=0"
+        return "F = 0"
     terms = [minterm_prod(m, tt.var_names) for m in tt.minterms]
     return "F = " + " + ".join(terms)
 
 def generate_pos(tt: TruthTable) -> str:
     if not tt.maxterms:
-        return "F=1"
+        return "F = 1"
     terms = [maxterm_sum(m, tt.var_names) for m in tt.maxterms]
-    return "F = " + " + ".join(terms)
+    return "F = " + " * ".join(terms)
 
 
 def display_canonical(tt: TruthTable, form: str):
-    """Print canonical equation + minterm/maxterm list."""
     form = form.upper()
     print(f"\n--- Canonical {form} Expression ---")
     if form == "SOP":
@@ -50,6 +49,5 @@ def display_canonical(tt: TruthTable, form: str):
         print(generate_pos(tt))
         print(f"Maxterms: M({', '.join(str(m) for m in tt.maxterms)})")
     print()
-
 
 

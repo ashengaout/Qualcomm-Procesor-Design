@@ -59,7 +59,7 @@ class TestBooleanLogic:
         pos = generate_pos(tt_all_zeros)
         assert pos.startswith("F =")
         rhs = pos.split("=", 1)[1].strip()
-        assert len(rhs.split("·")) == 4
+        assert len(rhs.split("*")) == 4
 
     def test_sop_3var_has_four_terms(self, tt_3var):
         sop = generate_sop(tt_3var)
@@ -69,4 +69,4 @@ class TestBooleanLogic:
     def test_pos_3var_has_four_terms(self, tt_3var):
         pos = generate_pos(tt_3var)
         rhs = pos.split("=", 1)[1].strip()
-        assert len(rhs.split("·")) == 4
+        assert len(rhs.split("*")) == 4

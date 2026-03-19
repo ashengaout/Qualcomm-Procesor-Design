@@ -44,7 +44,7 @@ def eval_sop(rhs: str, assignment: dict[str, int]) -> int:
     """
 
 def eval_pos(rhs: str, assignment: dict[str, int]) -> int:
-    for sum_term in rhs.split("·"):
+    for sum_term in rhs.split("*"):
         sum_term = sum_term.strip().strip("()")
         literals = [lit.strip() for lit in sum_term.split("+")]
         if not any(eval_literal(lit, assignment) == 1 for lit in literals):
@@ -61,7 +61,7 @@ def evaluate(exp: str, assignment: dict[str, int]) -> int:
         return 0
     if rhs == "1":
         return 1
-    if rhs.startswith("("):
+    if "*" in rhs or rhs.startswith("("):
         return eval_pos(rhs, assignment)
     return eval_sop(rhs, assignment)
 

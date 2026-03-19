@@ -57,11 +57,11 @@ class TestValidator:
 
     # --- POS evaluation ---
     def test_pos_all_terms_satisfied(self):
-        assert eval_pos("(A + B) · (A' + B')", {'A': 1, 'B': 0}) == 1
+        assert eval_pos("(A + B) * (A' + B')", {'A': 1, 'B': 0}) == 1
 
     def test_pos_one_term_unsatisfied(self):
         # second term A' + B' fails when A=1, B=1
-        assert eval_pos("(A + B) · (A' + B')", {'A': 1, 'B': 1}) == 0
+        assert eval_pos("(A + B) * (A' + B')", {'A': 1, 'B': 1}) == 0
 
     def test_pos_complement_in_term(self):
         assert eval_pos("(A + B')", {'A': 0, 'B': 0}) == 1
@@ -87,7 +87,7 @@ class TestValidator:
         assert validate(tt_and, "F = A'B") is False
 
     def test_validate_pass_pos(self, tt_and):
-        assert validate(tt_and, "F = (A + B) · (A + B') · (A' + B)") is True
+        assert validate(tt_and, "F = (A + B) * (A + B') * (A' + B)") is True
 
     def test_validate_fail_pos(self, tt_and):
         assert validate(tt_and, "F = (A + B)") is False
