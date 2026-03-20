@@ -100,7 +100,7 @@ def is_valid(minterms_in_group: list[int], n: int) -> bool:
     if mask == 0 and size == 1:
         return True
 
-    if not _is_power_of_two(mask):
+    if not _is_power_of_two(mask + 1):
         return False
 
     # Verify every minterm in the group is reachable via the mask from the first
