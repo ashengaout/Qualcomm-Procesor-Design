@@ -248,23 +248,20 @@ class MemoryHierarchy:
 
     def write(self, instruction: int):
         """
-        Write an instruction into L1, then write-back all the way down to SSD.
-        Data flows L1 -> L2 -> L3 -> DRAM -> SSD (no bypassing).
+        Write an instruction into L1 only (write-back policy).
+        Data propagates to lower levels only when evicted by FIFO replacement.
         """
-        msg = f"[Cycle {self.clock}] WRITE {instruction:#010x} -- write-back through hierarchy"
+        msg = f"[Cycle {self.clock}] WRITE {instruction:#010x} -- written to L1"
         self.access_log.append(msg)
         print(msg)
 
-        #write into L1 immediately (FIFO eviction may occur)
+        #write into L1 immediately; FIFO eviction cascades down via tick()
         evicted = self.l1.insert(instruction)
         if evicted is not None:
             evict_msg = f"  FIFO eviction from L1: {evicted:#010x} -> L2"
             self.access_log.append(evict_msg)
             print(evict_msg)
-            self._schedule_transfer(evicted, "L1", "L2")
-
-        #schedule write-back: first hop L1 -> L2; tick() chains down to SSD
-        self._schedule_transfer(instruction, "L1", "L2", final_dest="SSD")
+            self._schedule_transfer(evicted, "L1", "L2", final_dest="SSD")
 
         self._advance_until_idle()
 
