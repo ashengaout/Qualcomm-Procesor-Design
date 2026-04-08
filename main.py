@@ -123,8 +123,8 @@ def run_task3():
 
     mh.print_config()
 
-    #pre-load SSD with sequential 32-bit instructions
-    instructions = [i + 1 for i in range(ssd_size)]
+    #pre-load SSD with half-capacity sequential 32-bit instructions, leaving room for writes
+    instructions = [i + 1 for i in range(ssd_size // 2)]
     mh.load_ssd(instructions)
 
     print("\nEnter commands to interact with the memory hierarchy.")

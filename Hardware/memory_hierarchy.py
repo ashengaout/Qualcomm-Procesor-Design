@@ -7,22 +7,18 @@ Hardware/memory_hierarchy.py — Memory Hierarchy Simulation (SSD -> DRAM -> L3 
 
 from collections import deque
 
-
-# ---------------------------------------------------------------------------
 # PendingTransfer — tracks an in-flight data move between two levels
-# ---------------------------------------------------------------------------
 
 class PendingTransfer:
-    def __init__(self, instruction, from_level, to_level, cycles_remaining):
+    def __init__(self, instruction, from_level, to_level, cycles_remaining, final_dest=None):
         self.instruction = instruction          # 32-bit integer
         self.from_level = from_level            # source level name (str)
         self.to_level = to_level                # destination level name (str)
         self.cycles_remaining = cycles_remaining
+        self.final_dest = final_dest or to_level  # ultimate destination for chained transfers
 
 
-# ---------------------------------------------------------------------------
 # MemoryLevel — base storage tier used for SSD and DRAM
-# ---------------------------------------------------------------------------
 
 class MemoryLevel:
     def __init__(self, name, capacity, latency):
@@ -36,6 +32,8 @@ class MemoryLevel:
 
     def insert(self, instruction):
         if instruction not in self.storage:
+            if self.is_full():
+                self.storage.pop(0)     # evict oldest (FIFO) to stay within capacity
             self.storage.append(instruction)
 
     def remove(self, instruction):
@@ -46,9 +44,7 @@ class MemoryLevel:
         return len(self.storage) >= self.capacity
 
 
-# ---------------------------------------------------------------------------
 # CacheLevel — extends MemoryLevel with FIFO eviction and hit/miss tracking
-# ---------------------------------------------------------------------------
 
 class CacheLevel(MemoryLevel):
     def __init__(self, name, capacity, latency):
@@ -75,9 +71,7 @@ class CacheLevel(MemoryLevel):
             self.fifo_queue = deque(x for x in self.fifo_queue if x != instruction)
 
 
-# ---------------------------------------------------------------------------
 # MemoryHierarchy — orchestrates all levels, clock, and transfers
-# ---------------------------------------------------------------------------
 
 class MemoryHierarchy:
 
@@ -115,10 +109,7 @@ class MemoryHierarchy:
         self.pending_transfers = []
         self.access_log = []
 
-    # ------------------------------------------------------------------
     # Clock management
-    # ------------------------------------------------------------------
-
     def tick(self):
         #advance clock one cycle and resolve any completed transfers
         self.clock += 1
@@ -142,6 +133,17 @@ class MemoryHierarchy:
             self.access_log.append(msg)
             print(msg)
 
+            #if part of a chained transfer and not yet at final destination, schedule next hop
+            if xfer.to_level != xfer.final_dest:
+                names = [lvl.name for lvl in self.levels]
+                cur_idx = names.index(xfer.to_level)
+                fin_idx = names.index(xfer.final_dest)
+                if fin_idx > cur_idx:
+                    next_level = self.levels[cur_idx + 1]
+                else:
+                    next_level = self.levels[cur_idx - 1]
+                self._schedule_transfer(xfer.instruction, xfer.to_level, next_level.name, xfer.final_dest)
+
             #if a FIFO eviction happened, write evicted block down one level
             if evicted is not None:
                 lower = self._lower_level(xfer.to_level)
@@ -157,17 +159,15 @@ class MemoryHierarchy:
         while self.pending_transfers:
             self.tick()
 
-    # ------------------------------------------------------------------
     # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _schedule_transfer(self, instruction, from_name, to_name):
+    def _schedule_transfer(self, instruction, from_name, to_name, final_dest=None):
         src = self._level_map[from_name]
         xfer = PendingTransfer(
             instruction=instruction,
             from_level=from_name,
             to_level=to_name,
             cycles_remaining=src.latency,
+            final_dest=final_dest or to_name,
         )
         self.pending_transfers.append(xfer)
 
@@ -184,16 +184,12 @@ class MemoryHierarchy:
         return self.levels[idx + 1] if idx < len(self.levels) - 1 else None
 
     def _promote_to_l1(self, instruction, found_at):
-        #schedule step-by-step transfers from found_at all the way up to L1
-        names = [lvl.name for lvl in self.levels]   # SSD, DRAM, L3, L2, L1
-        start_idx = names.index(found_at)
-        for i in range(start_idx, len(names) - 1):
-            self._schedule_transfer(instruction, names[i], names[i + 1])
+        #schedule only the first hop; tick() chains each subsequent hop until L1
+        next_level = self._upper_level(found_at)
+        if next_level:
+            self._schedule_transfer(instruction, found_at, next_level.name, final_dest="L1")
 
-    # ------------------------------------------------------------------
     # Public operations
-    # ------------------------------------------------------------------
-
     def load_ssd(self, instructions: list):
         #pre-populate SSD with a list of 32-bit instructions
         for instr in instructions[:self.ssd.capacity]:
@@ -267,17 +263,12 @@ class MemoryHierarchy:
             print(evict_msg)
             self._schedule_transfer(evicted, "L1", "L2")
 
-        #schedule write-back: L1 -> L2 -> L3 -> DRAM -> SSD
-        path = ["L1", "L2", "L3", "DRAM", "SSD"]
-        for i in range(len(path) - 1):
-            self._schedule_transfer(instruction, path[i], path[i + 1])
+        #schedule write-back: first hop L1 -> L2; tick() chains down to SSD
+        self._schedule_transfer(instruction, "L1", "L2", final_dest="SSD")
 
         self._advance_until_idle()
 
-    # ------------------------------------------------------------------
     # Output / reporting
-    # ------------------------------------------------------------------
-
     def print_config(self):
         print("\n" + "=" * 60)
         print("  Memory Hierarchy Configuration")
@@ -324,17 +315,3 @@ class MemoryHierarchy:
                 print("    (empty)")
         print(f"\n  Total clock cycles elapsed: {self.clock}")
         print("=" * 60)
-
-
-# ---------------------------------------------------------------------------
-# Sanity check
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    mh = MemoryHierarchy(ssd_size=16, dram_size=8, l3_size=4, l2_size=2, l1_size=1)
-    mh.load_ssd([0xDEADBEEF, 0xCAFEBABE, 0x12345678])
-    mh.print_config()
-    mh.read(0xDEADBEEF)
-    mh.read(0xDEADBEEF)   # should hit L1
-    mh.print_stats()
-    mh.print_final_state()
