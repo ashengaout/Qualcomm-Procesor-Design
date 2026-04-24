@@ -3,7 +3,7 @@ Copy
 
 # 🔌 Qualcomm IoT Processor Prototype: Architecture Simulation
  
-🚧 **Project Status:** Active Development (Task 3: Memory Hierarchy Simulation)
+🚧 **Project Status:** Active Development (Task 4: Single-Cycle Processor)
  
 This repository contains the design and implementation of a 32-bit reference architecture for IoT applications. This project is developed for the CSC 6210 Computer Architecture course at Georgia State University.
  
@@ -162,6 +162,92 @@ q             — quit and display the full final report
 
 ---
 
+## ✅ Task 4: Single-Cycle Processor (AND / OR)
+
+The objective of this phase is to implement a single-cycle 32-bit processor datapath that evaluates the Boolean expression **Y = A·B + C'·D** using a three-instruction program.
+
+### Instruction Set
+
+| Instruction | funct (binary) | Operation |
+|-------------|----------------|-----------|
+| AND         | `100100`       | rd = rs & rt |
+| OR          | `100101`       | rd = rs \| rt |
+| AND-NOT     | `100110`       | rd = (~rs) & rt (invert flag set in funct, not opcode) |
+
+NOT is not a separate instruction — it is triggered by the ALU inversion control signal when `funct = 100110`.
+
+### Program Executed
+
+```
+Inputs:  t0=A, t1=B, t2=C (also loaded into t5), t3=D
+
+and  t4, t0, t1   ; t4 = A & B          funct=100100
+and  t6, t5, t3   ; t6 = (~C) & D       funct=100110  ← invert flag
+or   t0, t4, t6   ; t0 = t4 | t6 = Y   funct=100101
+```
+
+### Functional Requirements Implemented
+
+1. **Register File:** 32 general-purpose 32-bit registers. reg[0] ($zero) is hardwired to 0. Supports dual-port read (two register inputs per cycle) and single write output. Uses `DataSystem` for binary/hex display of register contents.
+2. **ALU:** Performs AND, OR, and AND-NOT. The `invert` control signal causes source-A to be bitwise-complemented before the operation.
+3. **Multiplexer (MUX):** 2-to-1 MUX selects the ALU's B input (register rt for all R-type instructions).
+4. **Control Unit:** Decodes the 32-bit R-type instruction word, extracts `opcode`, `rs`, `rt`, `rd`, `shamt`, and `funct` fields, and generates `alu_op`, `invert`, and `reg_write` control signals.
+5. **Instruction Memory:** Reuses the `MemoryHierarchy` from Task 3 as instruction memory. Instructions are pre-loaded into SSD and fetched into L1 on first access.
+6. **Single-Cycle Execution:** Every instruction completes Fetch → Decode → Execute → Write-back in one logical cycle.
+
+### Control Signals per Instruction
+
+| Instruction | `alu_op` | `invert` | `reg_write` |
+|-------------|----------|----------|-------------|
+| AND         | AND      | 0        | 1           |
+| AND-NOT     | AND      | 1        | 1           |
+| OR          | OR       | 0        | 1           |
+
+### How to Run
+
+```bash
+python main.py
+```
+
+Select **Task 4** from the menu, then enter boolean input values (0 or 1) for A, B, C, and D.
+
+### Example Output
+
+```
+==============================================================
+  Single-Cycle Processor -- Y = A.B + C'.D
+  Inputs:  A=1  B=1  C=0  D=1
+==============================================================
+  Program (3 instructions):
+    0x01094020  and  t4, t0, t1   ; t4 = A & B
+    0x016B7026  and  t6, t5, t3   ; t6 = (~C) & D   [invert flag set in funct=100110]
+    0x01907025  or   t0, t4, t6   ; t0 = t4 | t6 = Y
+
+--------------------------------------------------------------
+  Cycle 1: and  t4, t0, t1   ; t4 = A & B
+--------------------------------------------------------------
+  [FETCH]     instr_word = 0x01094020
+  [DECODE]    opcode=000000  rs=01000(t0)  rt=01001(t1)  rd=01100(t4)  funct=100000
+  [CTRL SIG]  ALU_OP=AND  INVERT=0  RegWrite=1  (AND    (100100))
+  [EXECUTE]   t0=1  t1=1  -> ALU(AND) = 1
+  [WRITEBACK] t4 <- 1
+
+  ...
+
+==============================================================
+  Intermediate register values:
+    t4 = A & B       = 1 & 1   = 1
+    t6 = (~C) & D    = (~0) & 1 = 1
+    t0 = t4 | t6     = 1 | 1   = 1  <- Y
+
+  Final output:  Y = 1
+  Expected (A.B + C'.D) = 1
+  Validation (logic_check): PASS
+==============================================================
+```
+
+---
+
 ## Module Structure
 ```
 Qualcomm-Procesor-Design/
@@ -171,14 +257,20 @@ Qualcomm-Procesor-Design/
 │   ├── boolean_logic.py        # Task 2: canonical SOP/POS generation
 │   ├── Kmap.py                 # Task 2: K-Map display and greedy simplification
 │   ├── logic_check.py          # Task 2: expression evaluation and PASS/FAIL
-│   └── memory_hierarchy.py     # Task 3: memory hierarchy simulation
+│   ├── memory_hierarchy.py     # Task 3: memory hierarchy simulation
+│   ├── register_file.py        # Task 4: 32-entry dual-port register file
+│   ├── alu.py                  # Task 4: ALU (AND / OR / AND-NOT via invert flag)
+│   ├── mux.py                  # Task 4: 2-to-1 multiplexer
+│   ├── control_unit.py         # Task 4: instruction decode and control signal generation
+│   └── processor.py            # Task 4: single-cycle processor datapath
 ├── Verification/
 │   ├── data_system_test.py
 │   ├── truth_table_test.py
 │   ├── boolean_logic_test.py
 │   ├── kmap_test.py
 │   ├── logic_check_test.py
-│   └── memory_hierarchy_test.py
+│   ├── memory_hierarchy_test.py
+│   └── processor_test.py
 ├── main.py
 └── README.md
 ```
@@ -200,3 +292,4 @@ python -m pytest Verification/ -v
 - ✅ Task 1: Data Systems, Conversion Logic, and Saturation
 - ✅ Task 2: Truth Table → Boolean Equation → K-Map Simplification
 - ✅ Task 3: Memory Hierarchy Simulation (SSD → DRAM → L3 → L2 → L1)
+- ✅ Task 4: Single-Cycle Processor (AND / OR / AND-NOT) — Y = A·B + C'·D

@@ -18,39 +18,57 @@ from Hardware.processor       import SingleCycleProcessor, _encode_rtype, T0, T1
 class TestRegisterFile:
     def test_initial_all_zero(self):
         rf = RegisterFile()
-        for i in range(32):
-            assert rf.read(i) == 0
+        for i in range(0, 32, 2):
+            v1, v2 = rf.read(i, i + 1)
+            assert v1 == 0
+            assert v2 == 0
 
     def test_write_and_read(self):
         rf = RegisterFile()
         rf.write(8, 1)
-        assert rf.read(8) == 1
+        val, _ = rf.read(8, 0)
+        assert val == 1
+
+    def test_dual_port_read(self):
+        rf = RegisterFile()
+        rf.write(8, 5)
+        rf.write(9, 7)
+        v1, v2 = rf.read(8, 9)
+        assert v1 == 5
+        assert v2 == 7
 
     def test_zero_register_hardwired(self):
         rf = RegisterFile()
         rf.write(0, 99)
-        assert rf.read(0) == 0
+        val, _ = rf.read(0, 0)
+        assert val == 0
 
     def test_write_enable_false(self):
         rf = RegisterFile()
         rf.write(9, 42, write_enable=False)
-        assert rf.read(9) == 0
+        val, _ = rf.read(9, 0)
+        assert val == 0
 
     def test_32bit_mask(self):
         rf = RegisterFile()
         rf.write(10, 0xFFFFFFFF + 1)   # overflows 32 bits → 0
-        assert rf.read(10) == 0
+        val, _ = rf.read(10, 0)
+        assert val == 0
 
     def test_load_bulk(self):
         rf = RegisterFile()
         rf.load({8: 1, 9: 0, 10: 1, 11: 1})
-        assert rf.read(8)  == 1
-        assert rf.read(11) == 1
+        v8, v11 = rf.read(8, 11)
+        assert v8  == 1
+        assert v11 == 1
 
-    def test_invalid_register(self):
+    def test_invalid_register_read(self):
         rf = RegisterFile()
         with pytest.raises(ValueError):
-            rf.read(32)
+            rf.read(32, 0)
+
+    def test_invalid_register_write(self):
+        rf = RegisterFile()
         with pytest.raises(ValueError):
             rf.write(32, 1)
 
@@ -145,7 +163,6 @@ class TestControlUnit:
         assert dec.funct == FUNCT_AND
 
     def test_bad_opcode(self):
-        # non-zero opcode → ValueError
         with pytest.raises(ValueError):
             self.cu.decode(0xAC000000)   # lw opcode = 0b100011
 
@@ -171,15 +188,12 @@ class TestProcessor:
             f"A={A} B={B} C={C} D={D}: got Y={Y}, expected {expected}"
         )
 
-    def test_intermediate_t4(self):
+    def test_intermediate_registers(self):
         proc = SingleCycleProcessor()
         proc.run(1, 1, 0, 1)
-        assert proc._reg_file.read(T4) == 1
-
-    def test_intermediate_t6(self):
-        proc = SingleCycleProcessor()
-        proc.run(1, 1, 0, 1)   # ~C=~0=1, D=1 → t6=1
-        assert proc._reg_file.read(T6) == 1
+        t4, t6 = proc._reg_file.read(T4, T6)
+        assert t4 == 1   # A & B = 1 & 1
+        assert t6 == 1   # (~C) & D = (~0) & 1
 
     def test_no_inversion_result(self):
         # A=1,B=1,C=1,D=0 → AB=1, ~C&D=0 → Y=1
