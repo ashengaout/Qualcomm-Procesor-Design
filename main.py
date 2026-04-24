@@ -10,6 +10,7 @@ from Hardware.boolean_logic import display_canonical, generate_sop, generate_pos
 from Hardware.Kmap import display_kmap, simplify_kmap
 from Hardware.logic_check import validate
 from Hardware.memory_hierarchy import MemoryHierarchy
+from Hardware.processor import SingleCycleProcessor
 
 
 def get_form_choice() -> str:
@@ -179,11 +180,38 @@ def run_task3():
     print("\nDone.")
 
 
+def run_task4():
+    print("=" * 62)
+    print("  CSC 6210 — Task 4: Single-Cycle Processor (AND / OR)")
+    print("  Target: Y = A·B + C'·D")
+    print("=" * 62)
+
+    def get_bit(name: str) -> int:
+        while True:
+            raw = input(f"  Enter {name} (0 or 1): ").strip()
+            if raw in ("0", "1"):
+                return int(raw)
+            print("    Error: please enter 0 or 1.")
+
+    print("\nEnter boolean input values (0 or 1):")
+    A = get_bit("A")
+    B = get_bit("B")
+    C = get_bit("C")
+    D = get_bit("D")
+
+    SingleCycleProcessor().run(A, B, C, D)
+
+
 if __name__ == "__main__":
-    choice = input("Run Task 1 (data system), Task 2 (K-Map), or Task 3 (Memory Hierarchy)? Enter 1, 2, or 3: ")
+    choice = input(
+        "Run Task 1 (data system), Task 2 (K-Map), "
+        "Task 3 (Memory Hierarchy), or Task 4 (Processor)? Enter 1, 2, 3, or 4: "
+    )
     if choice == "1":
         run_task1()
     elif choice == "2":
         run_task2()
     elif choice == "3":
         run_task3()
+    elif choice == "4":
+        run_task4()
